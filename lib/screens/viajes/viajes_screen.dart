@@ -1,132 +1,183 @@
 import 'package:flutter/material.dart';
-import 'package:shop/screens/viajes/tab_screen.dart';
-import 'package:shop/screens/viajes/traileros_screen.dart';
+import 'package:graphql_flutter/graphql_flutter.dart';
 
 class ViajesScreen extends StatelessWidget {
   const ViajesScreen({super.key});
 
   @override
   Widget build(BuildContext context) {
+    // Query que trae rutas por estado "por hacer" con información anidada.
+    // Se asume que la API retorna todas las rutas "por hacer".
+    const String rutasQuery = r'''
+      query {
+        rutasCompletasPorEstado(estado: "por hacer") {
+          id
+          distancia
+          prioridad
+          estado
+          fechaInicio
+          fechaFin
+          conductor {
+            id
+            nombre
+            usuario {
+              username
+              email
+            }
+          }
+          vehiculo {
+            id
+            modelo
+          }
+          entregas {
+            id
+            fechaEntrega
+            paquete {
+              id
+              numeroGuia
+            }
+          }
+        }
+      }
+    ''';
+
     return Scaffold(
       appBar: AppBar(
         title: const Text('Viajes'),
         backgroundColor: Colors.blue,
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.person),
-            onPressed: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(builder: (context) => const TrailerosScreen()),
-              );
-            },
-          ),
-        ],
+        // Se quita el botón de Traileros
       ),
       body: Padding(
         padding: const EdgeInsets.all(16.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Expanded(
-              child: SingleChildScrollView(
-                scrollDirection: Axis.horizontal,
-                child: SingleChildScrollView(
-                  child: DataTable(
-                    columns: const [
-                      DataColumn(label: Text('Folio despacho')),
-                      DataColumn(label: Text('Operador')),
-                      DataColumn(label: Text('# Económico')),
-                      DataColumn(label: Text('Territorio')),
-                      DataColumn(label: Text('Fecha asignación')),
-                      DataColumn(label: Text('Estado operativo')),
-                      DataColumn(label: Text('Estado administrativo')),
-                      DataColumn(label: Text('Fecha TEA')),
-                      DataColumn(label: Text('Estado TEA')),
-                      DataColumn(label: Text('Fin de viaje')),
-                    ],
-                    rows: const [
-                      DataRow(cells: [
-                        DataCell(Text('000038...')),
-                        DataCell(Text('Alejandro Ávila')),
-                        DataCell(Text('A8963')),
-                        DataCell(Text('Centro')),
-                        DataCell(Text('2018/03/24 - 10:00:20')),
-                        DataCell(Text('En curso cargando')),
-                        DataCell(Text('En tránsito')),
-                        DataCell(Text('2018/03/30 - 10:00:20')),
-                        DataCell(Text('A tiempo')),
-                        DataCell(Text('2018/04/02 - 10:00:20')),
-                      ]),
-                      DataRow(cells: [
-                        DataCell(Text('000985...')),
-                        DataCell(Text('Carlos Díaz')),
-                        DataCell(Text('C5012')),
-                        DataCell(Text('Sur')),
-                        DataCell(Text('2019/05/16 - 14:45:10')),
-                        DataCell(Text('En curso')),
-                        DataCell(Text('Activo')),
-                        DataCell(Text('2019/06/01 - 08:30:10')),
-                        DataCell(Text('A tiempo')),
-                        DataCell(Text('2019/06/04 - 12:00:00')),
-                      ]),
-                      DataRow(cells: [
-                        DataCell(Text('000583...')),
-                        DataCell(Text('Marta Fernández')),
-                        DataCell(Text('D2021')),
-                        DataCell(Text('Norte')),
-                        DataCell(Text('2020/02/14 - 09:20:05')),
-                        DataCell(Text('Completado')),
-                        DataCell(Text('Finalizado')),
-                        DataCell(Text('2020/02/18 - 16:00:00')),
-                        DataCell(Text('Completado')),
-                        DataCell(Text('2020/02/19 - 11:00:00')),
-                      ]),
-                      DataRow(cells: [
-                        DataCell(Text('000623...')),
-                        DataCell(Text('Luis Hernández')),
-                        DataCell(Text('E1042')),
-                        DataCell(Text('Este')),
-                        DataCell(Text('2021/09/08 - 18:30:10')),
-                        DataCell(Text('Retrasado')),
-                        DataCell(Text('Pendiente')),
-                        DataCell(Text('2021/09/10 - 08:00:00')),
-                        DataCell(Text('Retrasado')),
-                        DataCell(Text('2021/09/12 - 13:00:00')),
-                      ]),
-                      DataRow(cells: [
-                        DataCell(Text('001234...')),
-                        DataCell(Text('Antonio Pérez')),
-                        DataCell(Text('A1234')),
-                        DataCell(Text('Sur')),
-                        DataCell(Text('2022/01/01 - 12:15:30')),
-                        DataCell(Text('En espera')),
-                        DataCell(Text('En preparación')),
-                        DataCell(Text('2022/01/03 - 10:45:15')),
-                        DataCell(Text('Atrasado')),
-                        DataCell(Text('2022/01/05 - 17:20:10')),
-                      ]),
-                    ],
-                  ),
-                ),
+        child: Query(
+          options: QueryOptions(
+            document: gql(rutasQuery),
+            // Refresca cada 10 segundos (opcional)
+            pollInterval: const Duration(seconds: 10),
+          ),
+          builder: (QueryResult result, {FetchMore? fetchMore, VoidCallback? refetch}) {
+            // Error y Loading
+            if (result.hasException) {
+              return Center(child: Text('Error: ${result.exception.toString()}'));
+            }
+            if (result.isLoading) {
+              return const Center(child: CircularProgressIndicator());
+            }
+
+            // Extraemos el dato del query
+            final dynamic dataFromResult = result.data?['rutasCompletasPorEstado'];
+
+            // Convertir a lista: si es List, lo usa; si es Map, lo envuelve en una lista.
+            List<dynamic> rutas = [];
+            if (dataFromResult is List) {
+              rutas = dataFromResult;
+            } else if (dataFromResult is Map<String, dynamic>) {
+              rutas = [dataFromResult];
+            }
+
+            if (rutas.isEmpty) {
+              return const Center(child: Text("No hay rutas disponibles"));
+            }
+
+            // Obtenemos la fecha de hoy y mañana
+            final DateTime now = DateTime.now();
+            final DateTime today = DateTime(now.year, now.month, now.day);
+            final DateTime tomorrow = today.add(const Duration(days: 1));
+
+            // Separamos las rutas según su fechaInicio
+            List<dynamic> rutasHoy = [];
+            List<dynamic> rutasManana = [];
+            for (var ruta in rutas) {
+              // Se asume que "fechaInicio" es un string en formato ISO compatible.
+              final String fechaStr = ruta['fechaInicio'] ?? "";
+              final DateTime? fechaInicio = DateTime.tryParse(fechaStr);
+              if (fechaInicio != null) {
+                final DateTime fecha = DateTime(fechaInicio.year, fechaInicio.month, fechaInicio.day);
+                if (fecha.compareTo(today) == 0) {
+                  rutasHoy.add(ruta);
+                } else if (fecha.compareTo(tomorrow) == 0) {
+                  rutasManana.add(ruta);
+                }
+              }
+            }
+
+            // Creamos dos secciones: una para Hoy y otra para Mañana.
+            return SingleChildScrollView(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  if (rutasHoy.isNotEmpty) ...[
+                    const Padding(
+                      padding: EdgeInsets.all(8.0),
+                      child: Text("Hoy", style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+                    ),
+                    _buildDataTable(rutasHoy),
+                  ],
+                  if (rutasManana.isNotEmpty) ...[
+                    const Padding(
+                      padding: EdgeInsets.all(8.0),
+                      child: Text("Mañana", style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+                    ),
+                    _buildDataTable(rutasManana),
+                  ],
+                  if (rutasHoy.isEmpty && rutasManana.isEmpty)
+                    const Center(child: Text("No hay viajes para hoy o mañana")),
+                ],
               ),
-            ),
-          ],
+            );
+          },
         ),
       ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: () {
-          Navigator.push(
-            context,
-            MaterialPageRoute(builder: (context) => const TabScreen()),
+      // Se elimina el floatingActionButton
+    );
+  }
+
+  // Función para construir una DataTable a partir de una lista de rutas.
+  Widget _buildDataTable(List<dynamic> rutas) {
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      child: DataTable(
+        columns: const [
+          DataColumn(label: Text('ID')),
+          DataColumn(label: Text('Distancia')),
+          DataColumn(label: Text('Prioridad')),
+          DataColumn(label: Text('Estado')),
+          DataColumn(label: Text('Fecha Inicio')),
+          DataColumn(label: Text('Fecha Fin')),
+          DataColumn(label: Text('Conductor')),
+          DataColumn(label: Text('Usuario')),
+          DataColumn(label: Text('Vehículo')),
+          DataColumn(label: Text('Guía')),
+        ],
+        rows: rutas.map((ruta) {
+          // Extraemos datos anidados
+          final conductor = ruta['conductor'];
+          final usuario = conductor?['usuario'];
+          final vehiculo = ruta['vehiculo'];
+
+          // Se utiliza la primera entrega para obtener el número de guía, si existe.
+          final List<dynamic> entregas = ruta['entregas'] is List ? ruta['entregas'] : [];
+          final paquete = (entregas.isNotEmpty && entregas[0]['paquete'] != null)
+              ? entregas[0]['paquete']
+              : null;
+          final String numeroGuia = paquete != null ? paquete['numeroGuia']?.toString() ?? '' : 'N/A';
+
+          return DataRow(
+            cells: [
+              DataCell(Text(ruta['id'].toString())),
+              DataCell(Text(ruta['distancia'].toString())),
+              DataCell(Text(ruta['prioridad'].toString())),
+              DataCell(Text(ruta['estado'] ?? "")),
+              DataCell(Text(ruta['fechaInicio'] ?? "")),
+              DataCell(Text(ruta['fechaFin'] ?? "")),
+              DataCell(Text(conductor != null ? (conductor['nombre'] ?? "") : "")),
+              DataCell(Text(usuario != null ? (usuario['username'] ?? "") : "")),
+              DataCell(Text(vehiculo != null ? (vehiculo['modelo'] ?? "") : "")),
+              DataCell(Text(numeroGuia)),
+            ],
           );
-        },
-        backgroundColor: Colors.blue,
-        child: const Icon(Icons.add),
+        }).toList(),
       ),
     );
   }
 }
-
-
-

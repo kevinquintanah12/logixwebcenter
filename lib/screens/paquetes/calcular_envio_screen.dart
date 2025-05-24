@@ -1,6 +1,7 @@
+import 'dart:io';
+import 'dart:ui'; // Para efecto de desenfoque
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
-import 'dart:ui'; // Para efecto de desenfoque
 import 'package:graphql_flutter/graphql_flutter.dart';
 import 'package:shop/screens/administracion/viewtipoproducto_admin_screen.dart';
 import 'package:shop/screens/administracion/viewcentrodistribucion_admin_screen.dart';
@@ -44,7 +45,7 @@ class _CalcularEnvioScreenState extends State<CalcularEnvioScreen> {
         ),
         trailing: GestureDetector(
           onTap: () {
-            _mostrarDialogoCotizacion(context);
+            _validarYMostrarCotizacion(context);
           },
           child: const Text(
             'Cotizar',
@@ -59,9 +60,93 @@ class _CalcularEnvioScreenState extends State<CalcularEnvioScreen> {
             child: Column(
               children: [
                 const SizedBox(height: 20),
-                _buildTipoProductoField(context),
-                _buildOrigenField(context),
-                _buildDestinoField(context),
+                _buildFloatingSelectionField(
+                  label: 'Tipo de Producto',
+                  value: _tipoProductoController.text,
+                  placeholder: 'Seleccionar Tipo de Producto',
+                  onTap: () async {
+                    try {
+                      final selectedProducto = await showCupertinoModalPopup(
+                        context: context,
+                        builder: (context) => CupertinoPopupSurface(
+                          isSurfacePainted: true,
+                          child: SizedBox(
+                            height: MediaQuery.of(context).size.height * 0.8,
+                            child: ViewTipoProductos(),
+                          ),
+                        ),
+                      );
+                      if (selectedProducto != null) {
+                        setState(() {
+                          _tipoProductoController.text =
+                              selectedProducto['nombre'] ?? '';
+                          _tipoProductoId =
+                              selectedProducto['id']?.toString() ?? '';
+                        });
+                      }
+                    } catch (e) {
+                      debugPrint("Error al seleccionar Tipo de Producto: $e");
+                    }
+                  },
+                ),
+                _buildFloatingSelectionField(
+                  label: 'Centro de Distribución',
+                  value: _origenCdIdController.text,
+                  placeholder: 'Seleccionar Origen (CD)',
+                  onTap: () async {
+                    try {
+                      final selectedCentro = await showCupertinoModalPopup(
+                        context: context,
+                        builder: (context) => CupertinoPopupSurface(
+                          isSurfacePainted: true,
+                          child: SizedBox(
+                            height: MediaQuery.of(context).size.height * 0.8,
+                            child: ViewCentrosDistribucion(),
+                          ),
+                        ),
+                      );
+                      if (selectedCentro != null) {
+                        setState(() {
+                          _origenCdIdController.text =
+                              selectedCentro['ciudad'] ?? '';
+                          _origenCdId =
+                              selectedCentro['id']?.toString() ?? '';
+                        });
+                      }
+                    } catch (e) {
+                      debugPrint("Error al seleccionar Origen (CD): $e");
+                    }
+                  },
+                ),
+                _buildFloatingSelectionField(
+                  label: 'Ubicación',
+                  value: _destinoIdController.text,
+                  placeholder: 'Seleccionar Destino',
+                  onTap: () async {
+                    try {
+                      final selectedUbicacion = await showCupertinoModalPopup(
+                        context: context,
+                        builder: (context) => CupertinoPopupSurface(
+                          isSurfacePainted: true,
+                          child: SizedBox(
+                            height: MediaQuery.of(context).size.height * 0.8,
+                            child: ViewUbicaciones(),
+                          ),
+                        ),
+                      );
+                      if (selectedUbicacion != null) {
+                        setState(() {
+                          _destinoIdController.text =
+                              selectedUbicacion['ciudad'] ?? '';
+                          _destinoId =
+                              selectedUbicacion['id']?.toString() ?? '';
+                        });
+                      }
+                    } catch (e) {
+                      debugPrint("Error al seleccionar Destino: $e");
+                    }
+                  },
+                ),
                 _buildFloatingTextField(
                   controller: _pesoUnitarioController,
                   label: 'Peso Unitario (kg)',
@@ -97,7 +182,7 @@ class _CalcularEnvioScreenState extends State<CalcularEnvioScreen> {
                 CupertinoButton.filled(
                   child: const Text("Cotizar Envío"),
                   onPressed: () {
-                    _mostrarDialogoCotizacion(context);
+                    _validarYMostrarCotizacion(context);
                   },
                 ),
               ],
@@ -109,129 +194,116 @@ class _CalcularEnvioScreenState extends State<CalcularEnvioScreen> {
     );
   }
 
-  /// Widget auxiliar para mostrar un campo de selección con efecto similar a un Floating Label.
-  Widget _buildSelectionField({
+  /// Widget auxiliar para crear un campo de selección con efecto "floating label".  
+  /// Si [value] está vacío, muestra el placeholder dentro del campo; de lo contrario, el [label] se muestra flotando arriba.
+  Widget _buildFloatingSelectionField({
+    required String label,
     required String value,
     required String placeholder,
+    required VoidCallback onTap,
   }) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 10),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(16),
-        child: Container(
-          decoration: BoxDecoration(
-            color: Colors.white.withOpacity(0.8),
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: Colors.white.withOpacity(0.6), width: 1.5),
-          ),
-          padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 16),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(
-                value.isEmpty ? placeholder : value,
-                style: TextStyle(
-                  color: value.isEmpty ? Colors.black54 : Colors.black,
-                  fontWeight: FontWeight.bold,
-                  fontSize: 16,
+    return GestureDetector(
+      onTap: onTap,
+      child: AbsorbPointer(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            if (value.isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.only(left: 8.0, bottom: 4),
+                child: Text(
+                  label,
+                  style: const TextStyle(
+                      fontSize: 12, color: Colors.black54, fontWeight: FontWeight.w600),
                 ),
               ),
-              const Icon(CupertinoIcons.chevron_down, color: Colors.black54),
-            ],
-          ),
+            Padding(
+              padding: const EdgeInsets.only(bottom: 10),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(16),
+                child: Container(
+                  decoration: BoxDecoration(
+                    color: Colors.white.withOpacity(0.8),
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: Colors.white.withOpacity(0.6), width: 1.5),
+                  ),
+                  padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 16),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        value.isEmpty ? placeholder : value,
+                        style: TextStyle(
+                          color: value.isEmpty ? Colors.black54 : Colors.black,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 16,
+                        ),
+                      ),
+                      const Icon(CupertinoIcons.chevron_down, color: Colors.black54),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ],
         ),
       ),
     );
   }
 
-  // Campo de selección de Tipo de Producto
-  Widget _buildTipoProductoField(BuildContext context) {
-    return GestureDetector(
-      onTap: () async {
-        final selectedProducto = await showCupertinoModalPopup(
-          context: context,
-          builder: (context) => CupertinoPopupSurface(
-            isSurfacePainted: true,
-            child: SizedBox(
-              height: MediaQuery.of(context).size.height * 0.8,
-              child: ViewTipoProductos(),
-            ),
-          ),
-        );
-        if (selectedProducto != null) {
-          setState(() {
-            _tipoProductoController.text = selectedProducto['nombre'];
-            _tipoProductoId = selectedProducto['id'].toString();
-          });
-        }
-      },
-      child: AbsorbPointer(
-        child: _buildSelectionField(
-          value: _tipoProductoController.text,
-          placeholder: 'Seleccionar Tipo de Producto',
-        ),
-      ),
-    );
+  /// Valida que todos los campos requeridos tengan información y que los campos numéricos
+  /// contengan valores válidos (sólo números o números decimales).
+  /// Retorna un mensaje de error o `null` si la validación es exitosa.
+  String? _validarFormulario() {
+    // Validar campos de selección
+    if ((_tipoProductoController.text.isEmpty) ||
+        (_tipoProductoId == null || _tipoProductoId!.isEmpty)) {
+      return 'Seleccione un Tipo de Producto.';
+    }
+    if ((_origenCdIdController.text.isEmpty) ||
+        (_origenCdId == null || _origenCdId!.isEmpty)) {
+      return 'Seleccione un Origen (Centro de Distribución).';
+    }
+    if ((_destinoIdController.text.isEmpty) ||
+        (_destinoId == null || _destinoId!.isEmpty)) {
+      return 'Seleccione un Destino.';
+    }
+    // Validar campos de texto generales
+    if (_pesoUnitarioController.text.isEmpty ||
+        _numeroPiezasController.text.isEmpty ||
+        _dimensionesLargoController.text.isEmpty ||
+        _dimensionesAnchoController.text.isEmpty ||
+        _dimensionesAltoController.text.isEmpty ||
+        _descripcionController.text.isEmpty) {
+      return 'Por favor complete todos los campos.';
+    }
+    // Validar que los campos numéricos tengan valores válidos.
+    if (double.tryParse(_pesoUnitarioController.text) == null) {
+      return 'Ingrese un peso unitario válido.';
+    }
+    if (int.tryParse(_numeroPiezasController.text) == null) {
+      return 'Ingrese un número de piezas válido.';
+    }
+    if (double.tryParse(_dimensionesLargoController.text) == null) {
+      return 'Ingrese un largo válido.';
+    }
+    if (double.tryParse(_dimensionesAnchoController.text) == null) {
+      return 'Ingrese un ancho válido.';
+    }
+    if (double.tryParse(_dimensionesAltoController.text) == null) {
+      return 'Ingrese un alto válido.';
+    }
+    return null;
   }
 
-  // Campo de selección de Origen (Centro de Distribución)
-  Widget _buildOrigenField(BuildContext context) {
-    return GestureDetector(
-      onTap: () async {
-        final selectedCentro = await showCupertinoModalPopup(
-          context: context,
-          builder: (context) => CupertinoPopupSurface(
-            isSurfacePainted: true,
-            child: SizedBox(
-              height: MediaQuery.of(context).size.height * 0.8,
-              child: ViewCentrosDistribucion(),
-            ),
-          ),
-        );
-        if (selectedCentro != null) {
-          setState(() {
-            _origenCdIdController.text = selectedCentro['ciudad'];
-            _origenCdId = selectedCentro['id'].toString();
-          });
-        }
-      },
-      child: AbsorbPointer(
-        child: _buildSelectionField(
-          value: _origenCdIdController.text,
-          placeholder: 'Seleccionar Origen (CD)',
-        ),
-      ),
-    );
-  }
-
-  // Campo de selección de Destino (Ubicación)
-  Widget _buildDestinoField(BuildContext context) {
-    return GestureDetector(
-      onTap: () async {
-        final selectedUbicacion = await showCupertinoModalPopup(
-          context: context,
-          builder: (context) => CupertinoPopupSurface(
-            isSurfacePainted: true,
-            child: SizedBox(
-              height: MediaQuery.of(context).size.height * 0.8,
-              child: ViewUbicaciones(),
-            ),
-          ),
-        );
-        if (selectedUbicacion != null) {
-          setState(() {
-            _destinoIdController.text = selectedUbicacion['ciudad'];
-            _destinoId = selectedUbicacion['id'].toString();
-          });
-        }
-      },
-      child: AbsorbPointer(
-        child: _buildSelectionField(
-          value: _destinoIdController.text,
-          placeholder: 'Seleccionar Destino',
-        ),
-      ),
-    );
+  /// Si el formulario es válido, muestra el diálogo de confirmación; de lo contrario, muestra un diálogo de error.
+  void _validarYMostrarCotizacion(BuildContext context) {
+    final errorMensaje = _validarFormulario();
+    if (errorMensaje == null) {
+      _mostrarDialogoCotizacion(context);
+    } else {
+      _mostrarDialogoError(context, errorMensaje);
+    }
   }
 
   /// Widget que implementa un campo de texto con efecto "glass" y Floating Label.
@@ -310,7 +382,7 @@ class _CalcularEnvioScreenState extends State<CalcularEnvioScreen> {
     );
   }
 
-  // Muestra el diálogo de cotización con un resumen de la información y confirma el envío
+  // Muestra el diálogo de cotización con un resumen de la información y confirma el envío.
   void _mostrarDialogoCotizacion(BuildContext context) {
     showCupertinoDialog(
       context: context,
@@ -324,11 +396,11 @@ class _CalcularEnvioScreenState extends State<CalcularEnvioScreen> {
             children: [
               const SizedBox(height: 10),
               Text('Tipo de Producto: ${_tipoProductoController.text}'),
-              Text('ID Producto: $_tipoProductoId'),
+              Text('ID Producto: ${_tipoProductoId ?? ''}'),
               Text('Origen: ${_origenCdIdController.text}'),
-              Text('ID Origen: $_origenCdId'),
+              Text('ID Origen: ${_origenCdId ?? ''}'),
               Text('Destino: ${_destinoIdController.text}'),
-              Text('ID Destino: $_destinoId'),
+              Text('ID Destino: ${_destinoId ?? ''}'),
               Text('Peso: ${_pesoUnitarioController.text} kg'),
               Text('Piezas: ${_numeroPiezasController.text}'),
               Text('Envío Express: ${_envioExpress ? "Sí" : "No"}'),
@@ -408,7 +480,6 @@ class _CalcularEnvioScreenState extends State<CalcularEnvioScreen> {
       "envioExpress": _envioExpress,
     };
 
-    // Ejecutar la mutation
     try {
       final result = await client.mutate(
         MutationOptions(
@@ -417,13 +488,22 @@ class _CalcularEnvioScreenState extends State<CalcularEnvioScreen> {
         ),
       );
 
+      // Si la consulta retorna excepciones
       if (result.hasException) {
-        // Manejo del error: se podría mostrar un mensaje de error en la UI.
-        print("Error en la mutation: ${result.exception.toString()}");
-      } else {
-        // Procesar la respuesta exitosa.
-        print("Resultado de la mutation: ${result.data}");
-        // Mostrar la pantalla de Cotización como un modal en iOS.
+        final linkException = result.exception?.linkException;
+        final bool isInternetError = linkException is NetworkException ||
+            linkException?.originalException is SocketException;
+        _mostrarDialogoError(
+          context,
+          isInternetError
+              ? 'Parece que no tienes conexión a internet.'
+              : 'Error al enviar la cotización, por favor intenta de nuevo.',
+        );
+        return;
+      }
+
+      if (result.data != null) {
+        // Mostrar la pantalla de Cotización en un modal (estilo iOS)
         showCupertinoModalPopup(
           context: context,
           builder: (context) => CupertinoPopupSurface(
@@ -436,7 +516,29 @@ class _CalcularEnvioScreenState extends State<CalcularEnvioScreen> {
         );
       }
     } catch (e) {
-      print("Excepción al enviar la cotización: $e");
+      debugPrint("Excepción al enviar la cotización: $e");
+      _mostrarDialogoError(
+          context, 'Ha ocurrido un error inesperado. Inténtalo de nuevo.');
     }
+  }
+
+  /// Muestra un diálogo de error con un mensaje personalizado.
+  void _mostrarDialogoError(BuildContext context, String mensaje) {
+    showCupertinoDialog(
+      context: context,
+      builder: (context) {
+        return CupertinoAlertDialog(
+          title: const Text('Error'),
+          content: Text(mensaje),
+          actions: [
+            CupertinoDialogAction(
+              isDefaultAction: true,
+              child: const Text('Aceptar'),
+              onPressed: () => Navigator.pop(context),
+            )
+          ],
+        );
+      },
+    );
   }
 }

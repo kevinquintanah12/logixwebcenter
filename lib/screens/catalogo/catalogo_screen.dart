@@ -1,9 +1,8 @@
 import 'package:flutter/material.dart';
 // Importa las nuevas pantallas de Choferes y Camiones
-import 'choferes_screen.dart'; // Asegúrate de que la ruta sea correcta
-import 'camiones_screen.dart'; // Asegúrate de que la ruta sea correcta
-import 'clientes_screen.dart'; // Asegúrate de que la ruta sea correcta
-import 'productos_screen.dart'; // Asegúrate de que la ruta sea correcta
+import 'choferes_screen.dart';
+import 'camiones_screen.dart';
+import 'clientes_screen.dart';
 
 class CatalogsScreen extends StatefulWidget {
   @override
@@ -11,20 +10,24 @@ class CatalogsScreen extends StatefulWidget {
 }
 
 class _CatalogsScreenState extends State<CatalogsScreen> {
-  int _selectedIndex = 0; // Índice para saber qué pantalla mostrar
+  int _selectedIndex = 0;
 
   final List<Widget> catalogScreens = [
     ClientesScreen(),
-    ProductosScreen(),
-    ChoferesScreen(), // Nueva pantalla de Choferes
-    CamionesScreen(), // Nueva pantalla de Camiones
+    ChoferesScreen(),
+    CamionesScreen(),
   ];
 
   final List<String> catalogLabels = [
     "Clientes",
-    "Productos",
     "Choferes",
     "Camiones",
+  ];
+
+  final List<IconData> catalogIcons = [
+    Icons.person_outline,
+    Icons.directions_bus_outlined,
+    Icons.local_shipping_outlined,
   ];
 
   @override
@@ -32,13 +35,12 @@ class _CatalogsScreenState extends State<CatalogsScreen> {
     return Scaffold(
       body: LayoutBuilder(
         builder: (context, constraints) {
-          // Si el ancho de la pantalla es mayor a 600, usa el menú lateral
+          // Lateral para pantallas anchas
           if (constraints.maxWidth > 600) {
             return Row(
               children: [
-                // Menú lateral con sombra
                 Container(
-                  width: 110, // Ancho del Drawer
+                  width: 110,
                   decoration: BoxDecoration(
                     color: Colors.white.withOpacity(0.9),
                     boxShadow: [
@@ -49,64 +51,41 @@ class _CatalogsScreenState extends State<CatalogsScreen> {
                       ),
                     ],
                   ),
-                  child: ListView(
-                    padding: EdgeInsets.symmetric(vertical: 20, horizontal: 16),
-                    children: [
-                      _buildMenuItem(
-                        icon: Icons.person_outline,
-                        label: "Clientes",
-                        index: 0,
-                      ),
-                      SizedBox(height: 16),
-                      _buildMenuItem(
-                        icon: Icons.shopping_bag_outlined,
-                        label: "Productos",
-                        index: 1,
-                      ),
-                      SizedBox(height: 16),
-                      _buildMenuItem(
-                        icon: Icons.directions_bus_outlined, // Icono para Choferes
-                        label: "Choferes",
-                        index: 2,
-                      ),
-                      SizedBox(height: 16),
-                      _buildMenuItem(
-                        icon: Icons.local_shipping_outlined, // Icono para Camiones
-                        label: "Camiones",
-                        index: 3,
-                      ),
-                    ],
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: List.generate(catalogLabels.length, (index) {
+                      return Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 12.0),
+                        child: _buildMenuItem(
+                          icon: catalogIcons[index],
+                          label: catalogLabels[index],
+                          index: index,
+                        ),
+                      );
+                    }),
                   ),
                 ),
-                Expanded(
-                  child: catalogScreens[_selectedIndex],
-                ),
+                Expanded(child: catalogScreens[_selectedIndex]),
               ],
             );
           } else {
-            // Si el ancho es menor a 600, usa BottomNavigationBar con solo nombres
+            // BottomNavigationBar para pantallas estrechas
             return Scaffold(
               bottomNavigationBar: BottomNavigationBar(
                 currentIndex: _selectedIndex,
-                onTap: (index) {
-                  setState(() {
-                    _selectedIndex = index;
-                  });
-                },
-                items: catalogLabels
-                    .map(
-                      (label) => BottomNavigationBarItem(
-                        icon: SizedBox.shrink(), // Sin ícono
-                        label: label, // Solo texto
-                      ),
-                    )
-                    .toList(),
+                onTap: (index) => setState(() => _selectedIndex = index),
+                items: List.generate(catalogLabels.length, (index) {
+                  return BottomNavigationBarItem(
+                    icon: SizedBox.shrink(),
+                    label: catalogLabels[index],
+                  );
+                }),
                 selectedItemColor: Colors.blueAccent,
                 unselectedItemColor: Colors.grey,
                 showUnselectedLabels: true,
                 type: BottomNavigationBarType.fixed,
               ),
-              body: catalogScreens[_selectedIndex], // Muestra la pantalla seleccionada
+              body: catalogScreens[_selectedIndex],
             );
           }
         },
@@ -122,32 +101,28 @@ class _CatalogsScreenState extends State<CatalogsScreen> {
     bool isSelected = _selectedIndex == index;
 
     return GestureDetector(
-      onTap: () {
-        setState(() {
-          _selectedIndex = index;
-        });
-      },
+      onTap: () => setState(() => _selectedIndex = index),
       child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
+        mainAxisSize: MainAxisSize.min,
         children: [
           Container(
             decoration: BoxDecoration(
               shape: BoxShape.circle,
-              color: isSelected ? Colors.grey[300] : Colors.white, // Cambiar el color de fondo al seleccionar
+              color: isSelected ? Colors.grey[300] : Colors.white,
             ),
-            padding: EdgeInsets.all(10.0), // Ajustado el padding para íconos más pequeños
+            padding: EdgeInsets.all(10),
             child: Icon(
               icon,
-              size: 27.0, // Íconos más pequeños
-              color: isSelected ? Colors.grey : Colors.black, // Cambiar color del ícono cuando está seleccionado
+              size: 27,
+              color: isSelected ? Colors.grey : Colors.black,
             ),
           ),
-          SizedBox(height: 8),
+          const SizedBox(height: 8),
           Text(
             label,
             style: TextStyle(
               fontSize: 15,
-              color: isSelected ? Colors.grey : Colors.black, // Cambiar color del texto cuando está seleccionado
+              color: isSelected ? Colors.grey : Colors.black,
             ),
           ),
         ],

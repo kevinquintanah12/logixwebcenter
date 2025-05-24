@@ -26,6 +26,14 @@ dependencies:
   latlong2: ^0.8.1
   http: ^0.13.5
   fluttertoast: ^8.0.9
+  fl_chart: ^0.71.0
+  flutter_typeahead: ^4.8.0
+  macos_ui: ^1.0.0
+  mask_text_input_formatter: ^2.4.0
+
+
+
+
 
 
   
@@ -43,6 +51,8 @@ dev_dependencies:
   shared_preferences: ^2.2.0
   flutter_secure_storage: ^5.0.2 # Asegúrate de usar la última versión
   lottie: ^2.6.0  # Asegúrate de verificar la última versión en pub.dev
+  mqtt_client: ^9.6.1
+
 
 
   flutter_lints: ^4.0.0

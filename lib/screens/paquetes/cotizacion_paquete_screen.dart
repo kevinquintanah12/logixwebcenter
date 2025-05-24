@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:graphql_flutter/graphql_flutter.dart';
@@ -48,6 +49,10 @@ class CotizacionPaqueteScreen extends StatelessWidget {
 
   final TextEditingController correoController = TextEditingController();
 
+  final RegExp _emailRegExp = RegExp(
+    r"^[a-zA-Z0-9.a-zA-Z0-9!#$%&'*+/=?^_`{|}~-]+@[a-zA-Z0-9]+\.[a-zA-Z]+",
+  );
+
   @override
   Widget build(BuildContext context) {
     final clientNotifier = GraphQLProvider.of(context);
@@ -69,13 +74,47 @@ class CotizacionPaqueteScreen extends StatelessWidget {
             child: Query(
               options: QueryOptions(
                 document: gql(queryCalcularEnvio),
+                // Se puede configurar fetchPolicy, errorPolicy, etc.
               ),
               builder: (QueryResult result, {VoidCallback? refetch, FetchMore? fetchMore}) {
                 if (result.isLoading) {
                   return const Center(child: CupertinoActivityIndicator());
                 }
+
+                // Validación de error: se revisa si es problema de red.
                 if (result.hasException) {
-                  return Center(child: Text("Error: ${result.exception.toString()}"));
+                  final linkException = result.exception?.linkException;
+                  final bool isInternetError = linkException is NetworkException ||
+                      linkException?.originalException is SocketException;
+                  return Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(
+                          isInternetError
+                              ? CupertinoIcons.wifi_exclamationmark
+                              : CupertinoIcons.exclamationmark_circle,
+                          size: 50,
+                          color: CupertinoColors.systemGrey,
+                        ),
+                        const SizedBox(height: 16),
+                        Text(
+                          isInternetError
+                              ? 'Parece que no tienes conexión a internet.'
+                              : 'No pudimos cargar la cotización en este momento.',
+                          style: const TextStyle(
+                              fontSize: 14, color: CupertinoColors.systemGrey),
+                          textAlign: TextAlign.center,
+                        ),
+                        const SizedBox(height: 12),
+                        CupertinoButton.filled(
+                          padding: const EdgeInsets.symmetric(horizontal: 20),
+                          onPressed: refetch,
+                          child: const Text("Reintentar"),
+                        ),
+                      ],
+                    ),
+                  );
                 }
 
                 final envio = result.data?['ultimoCalculo'];
@@ -114,24 +153,8 @@ class CotizacionPaqueteScreen extends StatelessWidget {
                           const Divider(thickness: 1, color: Colors.black26),
                           _buildDetalleItem(context, "Total Estimado", totalTarifa, isTotal: true),
                           const SizedBox(height: 20),
-                          // Sección para ingresar el correo
-                          const Text(
-                            'Ingresa tu correo:',
-                            style: TextStyle(fontSize: 14, fontFamily: 'Grandis Extended'),
-                          ),
-                          const SizedBox(height: 8),
-                          CupertinoTextField(
-                            controller: correoController,
-                            placeholder: 'Correo electrónico',
-                            keyboardType: TextInputType.emailAddress,
-                            style: const TextStyle(fontSize: 16, color: Colors.black),
-                            padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 12),
-                            decoration: BoxDecoration(
-                              color: Colors.white.withOpacity(0.8),
-                              borderRadius: BorderRadius.circular(10),
-                              border: Border.all(color: Colors.grey.shade300, width: 1),
-                            ),
-                          ),
+                          // Sección para ingresar el correo con efecto "floating label"
+                          _buildFloatingEmailField(),
                           const SizedBox(height: 20),
                           Row(
                             mainAxisAlignment: MainAxisAlignment.spaceEvenly,
@@ -140,7 +163,10 @@ class CotizacionPaqueteScreen extends StatelessWidget {
                                 padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
                                 child: const Text(
                                   'Enviar Cotización',
-                                  style: TextStyle(fontSize: 16, fontFamily: 'Grandis Extended', color: Colors.white),
+                                  style: TextStyle(
+                                      fontSize: 16,
+                                      fontFamily: 'Grandis Extended',
+                                      color: Colors.white),
                                 ),
                                 onPressed: () {
                                   _enviarCotizacion(context);
@@ -150,10 +176,12 @@ class CotizacionPaqueteScreen extends StatelessWidget {
                                 padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
                                 child: const Text(
                                   'Aceptar Envío',
-                                  style: TextStyle(fontSize: 16, fontFamily: 'Grandis Extended', color: Colors.white),
+                                  style: TextStyle(
+                                      fontSize: 16,
+                                      fontFamily: 'Grandis Extended',
+                                      color: Colors.white),
                                 ),
                                 onPressed: () {
-                                  // Navegamos hacia PaymentViewScreen
                                   Navigator.push(
                                     context,
                                     CupertinoPageRoute(
@@ -177,7 +205,8 @@ class CotizacionPaqueteScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildDetalleItem(BuildContext context, String title, String value, {bool isTotal = false}) {
+  Widget _buildDetalleItem(BuildContext context, String title, String value,
+      {bool isTotal = false}) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 6.0),
       child: Row(
@@ -187,9 +216,9 @@ class CotizacionPaqueteScreen extends StatelessWidget {
             child: Text(
               title,
               style: CupertinoTheme.of(context).textTheme.textStyle.copyWith(
-                fontSize: 16,
-                fontWeight: isTotal ? FontWeight.bold : FontWeight.normal,
-              ),
+                    fontSize: 16,
+                    fontWeight: isTotal ? FontWeight.bold : FontWeight.normal,
+                  ),
               overflow: TextOverflow.ellipsis,
             ),
           ),
@@ -208,73 +237,78 @@ class CotizacionPaqueteScreen extends StatelessWidget {
     );
   }
 
+  /// Widget para el campo de correo con efecto "floating label".
+  Widget _buildFloatingEmailField() {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Si hay texto en el correo, se muestra el label flotante
+          if (correoController.text.trim().isNotEmpty)
+            const Padding(
+              padding: EdgeInsets.only(left: 8.0, bottom: 4),
+              child: Text(
+                'Correo electrónico',
+                style: TextStyle(fontSize: 12, color: Colors.black54, fontWeight: FontWeight.w600),
+              ),
+            ),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(10),
+            child: Container(
+              decoration: BoxDecoration(
+                color: Colors.white.withOpacity(0.8),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: Colors.grey.shade300, width: 1),
+              ),
+              child: CupertinoTextField(
+                controller: correoController,
+                placeholder: 'Correo electrónico',
+                keyboardType: TextInputType.emailAddress,
+                style: const TextStyle(fontSize: 16, color: Colors.black),
+                padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 12),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Ejecuta la query para enviar la cotización por correo, validando antes el formato del email.
   void _enviarCotizacion(BuildContext context) {
-    // Obtener el correo ingresado
     final email = correoController.text.trim();
 
-    if (email.isEmpty) {
+    if (email.isEmpty || !_emailRegExp.hasMatch(email)) {
       _mostrarDialogoError(context, 'Por favor ingrese un correo electrónico válido.');
       return;
     }
 
-    // Ejecutar la query de GraphQL para enviar cotización
     final client = GraphQLProvider.of(context).value;
 
     client.query(
       QueryOptions(
         document: gql(queryEnviarCotizacion),
-        variables: {
-          'email': email,
-        },
+        variables: {'email': email},
       ),
     ).then((result) {
       if (result.hasException) {
-        _mostrarDialogoError(context, 'Error al enviar la cotización: ${result.exception.toString()}');
+        // Revisa si es error de red
+        final linkException = result.exception?.linkException;
+        final bool isInternetError = linkException is NetworkException ||
+            linkException?.originalException is SocketException;
+        _mostrarDialogoError(
+          context,
+          isInternetError
+              ? 'Parece que no tienes conexión a internet.'
+              : 'Error al enviar la cotización: ${result.exception.toString()}',
+        );
       } else {
         _mostrarDialogoExito(context);
       }
     }).catchError((e) {
       _mostrarDialogoError(context, 'Error al enviar la cotización: ${e.toString()}');
     });
-  }
-
-  void _mostrarDialogoContacto(BuildContext context) {
-    showCupertinoDialog(
-      context: context,
-      builder: (context) {
-        return CupertinoAlertDialog(
-          content: Column(
-            children: [
-              CupertinoTextField(
-                controller: correoController,
-                placeholder: 'Correo electrónico',
-                keyboardType: TextInputType.emailAddress,
-                style: const TextStyle(color: Colors.black, fontSize: 16),
-                padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 12),
-                decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.8),
-                  borderRadius: BorderRadius.circular(10),
-                  border: Border.all(color: Colors.grey.shade300, width: 1),
-                ),
-              ),
-            ],
-          ),
-          actions: [
-            CupertinoDialogAction(
-              child: const Text('Cancelar', style: TextStyle(color: Colors.black)),
-              onPressed: () => Navigator.pop(context),
-            ),
-            CupertinoDialogAction(
-              child: const Text('Enviar', style: TextStyle(color: Colors.black)),
-              onPressed: () {
-                Navigator.pop(context);
-                _enviarCotizacion(context);
-              },
-            ),
-          ],
-        );
-      },
-    );
   }
 
   void _mostrarDialogoExito(BuildContext context) {

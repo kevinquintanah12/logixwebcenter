@@ -124,7 +124,7 @@ Route<dynamic> generateRoute(RouteSettings settings) {
 
     case controlScreen:
       return MaterialPageRoute(
-        builder: (context) =>  ControlPaqueteScreen(),
+        builder: (context) =>  AddPaqueteScreen(),
       );
 
     case AddtipoProductoScreen:

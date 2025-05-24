@@ -1,6 +1,25 @@
+import 'dart:convert';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:graphql_flutter/graphql_flutter.dart';
+
+int parseInt(dynamic v, {int fallback = 0}) {
+  try {
+    if (v is int) return v;
+    if (v is String) return int.tryParse(v) ?? fallback;
+  } catch (_) {}
+  return fallback;
+}
+
+double parseDouble(dynamic v, {double fallback = 0.0}) {
+  try {
+    if (v is double) return v;
+    if (v is num) return v.toDouble();
+    if (v is String) return double.tryParse(v) ?? fallback;
+  } catch (_) {}
+  return fallback;
+}
 
 class CrudTipoProductosAdmin extends StatefulWidget {
   @override
@@ -8,356 +27,312 @@ class CrudTipoProductosAdmin extends StatefulWidget {
 }
 
 class _CrudTipoProductosAdminState extends State<CrudTipoProductosAdmin> {
-  List<Map<String, dynamic>> tipoProductos = [];
-  TextEditingController _searchController = TextEditingController();
+  final TextEditingController _searchController = TextEditingController();
   String searchQuery = '';
 
-  // Consulta que obtiene los productos con su temperatura y humedad (si existen).
-  final String obtenerTipoProductosQuery = """
+  // — Queries y Mutaciones —
+  static const String _queryList = r'''
     query ObtenerTipoProductos {
       tipoProductos {
         id
         nombre
         descripcion
         precioBase
-        temperatura {
-          id
-          rangoMinimo
-          rangoMaximo
-          tarifaExtra
-        }
-        humedad {
-          id
-          rangoMinimo
-          rangoMaximo
-          tarifaExtra
-        }
+        temperatura { id rangoMinimo rangoMaximo tarifaExtra }
+        humedad     { id rangoMinimo rangoMaximo tarifaExtra }
       }
     }
-  """;
+  ''';
 
-  // Mutación para crear un tipo de producto.
-  final String crearTipoProductoMutation = """
-    mutation CrearTipoProducto(\$nombre: String!, \$descripcion: String!, \$precioBase: Float!) {
-      crearTipoProducto(nombre: \$nombre, descripcion: \$descripcion, precioBase: \$precioBase) {
-        tipoProducto {
-          id
-          nombre
-          descripcion
-          precioBase
-        }
+  static const String _mCreateProd = r'''
+    mutation CrearTipoProducto($nombre:String!,$descripcion:String!,$precioBase:Float!){
+      crearTipoProducto(nombre:$nombre,descripcion:$descripcion,precioBase:$precioBase){
+        tipoProducto{ id }
       }
     }
-  """;
+  ''';
 
-  // Mutación para crear la Temperatura de un producto.
-  final String crearTemperaturaMutation = """
-    mutation CrearTemperatura(\$tipoProductoId: Int!, \$rangoMinimo: Int!, \$rangoMaximo: Int!, \$tarifaExtra: Float!) {
-      crearTemperatura(tipoProductoId: \$tipoProductoId, rangoMinimo: \$rangoMinimo, rangoMaximo: \$rangoMaximo, tarifaExtra: \$tarifaExtra) {
-        temperatura {
-          id
-          rangoMinimo
-          rangoMaximo
-          tarifaExtra
-        }
+  static const String _mEditProd = r'''
+    mutation EditarTipoProducto($id:Int!,$nombre:String!,$descripcion:String!,$precioBase:Float!){
+      editarTipoProducto(id:$id,nombre:$nombre,descripcion:$descripcion,precioBase:$precioBase){
+        tipoProducto{ id }
       }
     }
-  """;
+  ''';
 
-  // Mutación para crear la Humedad de un producto.
-  final String crearHumedadMutation = """
-    mutation CrearHumedad(\$tipoProductoId: Int!, \$rangoMinimo: Int!, \$rangoMaximo: Int!, \$tarifaExtra: Float!) {
-      crearHumedad(tipoProductoId: \$tipoProductoId, rangoMinimo: \$rangoMinimo, rangoMaximo: \$rangoMaximo, tarifaExtra: \$tarifaExtra) {
-        humedad {
-          id
-          rangoMinimo
-          rangoMaximo
-          tarifaExtra
-        }
+  static const String _mDeleteProd = r'''
+    mutation EliminarTipoProducto($id:Int!){
+      eliminarTipoProducto(id:$id){ ok }
+    }
+  ''';
+
+  static const String _mCreateTemp = r'''
+    mutation CrearTemperatura($tipoProductoId:Int!,$rangoMinimo:Int!,$rangoMaximo:Int!,$tarifaExtra:Float){
+      crearTemperatura(tipoProductoId:$tipoProductoId,rangoMinimo:$rangoMinimo,rangoMaximo:$rangoMaximo,tarifaExtra:$tarifaExtra){
+        temperatura{id rangoMinimo rangoMaximo tarifaExtra}
       }
     }
-  """;
+  ''';
 
-  // Diálogo para agregar un nuevo producto.
-  void _showAddDialog(BuildContext context) {
-    TextEditingController nombreController = TextEditingController();
-    TextEditingController descripcionController = TextEditingController();
-    TextEditingController precioController = TextEditingController();
+  static const String _mEditTemp = r'''
+    mutation EditarTemperatura($id:Int!,$rangoMinimo:Int,$rangoMaximo:Int,$tarifaExtra:Float){
+      editarTemperatura(id:$id,rangoMinimo:$rangoMinimo,rangoMaximo:$rangoMaximo,tarifaExtra:$tarifaExtra){
+        temperatura{id rangoMinimo rangoMaximo tarifaExtra}
+      }
+    }
+  ''';
 
+  static const String _mCreateHum = r'''
+    mutation CrearHumedad($tipoProductoId:Int!,$rangoMinimo:Int!,$rangoMaximo:Int!,$tarifaExtra:Float){
+      crearHumedad(tipoProductoId:$tipoProductoId,rangoMinimo:$rangoMinimo,rangoMaximo:$rangoMaximo,tarifaExtra:$tarifaExtra){
+        humedad{id rangoMinimo rangoMaximo tarifaExtra}
+      }
+    }
+  ''';
+
+  static const String _mEditHum = r'''
+    mutation EditarHumedad($id:Int!,$rangoMinimo:Int,$rangoMaximo:Int,$tarifaExtra:Float){
+      editarHumedad(id:$id,rangoMinimo:$rangoMinimo,rangoMaximo:$rangoMaximo,tarifaExtra:$tarifaExtra){
+        humedad{id rangoMinimo rangoMaximo tarifaExtra}
+      }
+    }
+  ''';
+
+  void _alert(BuildContext c, String title, String msg) {
     showCupertinoDialog(
-      context: context,
-      builder: (context) {
-        return CupertinoAlertDialog(
-          title: Text('Agregar Producto'),
-          content: Column(
-            children: [
-              CupertinoTextField(
-                controller: nombreController,
-                placeholder: 'Nombre',
-              ),
-              SizedBox(height: 8),
-              CupertinoTextField(
-                controller: descripcionController,
-                placeholder: 'Descripción',
-              ),
-              SizedBox(height: 8),
-              CupertinoTextField(
-                controller: precioController,
-                placeholder: 'Precio Base',
-                keyboardType: TextInputType.numberWithOptions(decimal: true),
-              ),
-            ],
-          ),
-          actions: [
-            CupertinoDialogAction(
-              child: Text('Cancelar'),
-              onPressed: () => Navigator.pop(context),
-            ),
-            // Se utiliza Mutation para crear el producto.
-            Mutation(
-              options: MutationOptions(
-                document: gql(crearTipoProductoMutation),
-                onCompleted: (dynamic resultData) {
-                  if (resultData != null) {
-                    final tipoProducto = resultData['crearTipoProducto']['tipoProducto'];
-                    setState(() {
-                      tipoProductos.add({
-                        'id': tipoProducto['id'],
-                        'nombre': tipoProducto['nombre'],
-                        'descripcion': tipoProducto['descripcion'],
-                        'precioBase': tipoProducto['precioBase'],
-                        // Inicialmente, no tiene temperatura ni humedad.
-                        'temperatura': null,
-                        'humedad': null,
-                      });
-                    });
-                    print('Mutación crearTipoProducto completada: $tipoProducto');
-                  }
-                  Navigator.pop(context);
-                },
-                onError: (error) {
-                  print('Error en mutación crearTipoProducto: ${error.toString()}');
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text("Error: ${error.toString()}")),
-                  );
-                },
-              ),
-              builder: (RunMutation runMutation, QueryResult? result) {
-                return CupertinoDialogAction(
-                  child: Icon(CupertinoIcons.check_mark_circled),
-                  onPressed: () {
-                    runMutation({
-                      'nombre': nombreController.text,
-                      'descripcion': descripcionController.text,
-                      'precioBase': double.parse(precioController.text),
-                    });
-                  },
-                );
-              },
-            ),
-          ],
-        );
-      },
+      context: c,
+      builder: (_) => CupertinoAlertDialog(
+        title: Text(title),
+        content: Text(msg),
+        actions: [
+          CupertinoDialogAction(child: const Text('OK'), onPressed: () => Navigator.pop(c)),
+        ],
+      ),
     );
   }
 
-  // Diálogo para ver, agregar o editar temperatura y humedad.
-  void _showTempHumedadDialog(BuildContext context, Map<String, dynamic> producto) {
-    // Controladores para los valores de temperatura y humedad.
-    TextEditingController tempMinController = TextEditingController(
-        text: producto['temperatura'] != null ? producto['temperatura']['rangoMinimo'].toString() : '');
-    TextEditingController tempMaxController = TextEditingController(
-        text: producto['temperatura'] != null ? producto['temperatura']['rangoMaximo'].toString() : '');
-    TextEditingController tempTarifaController = TextEditingController(
-        text: producto['temperatura'] != null ? producto['temperatura']['tarifaExtra'].toString() : '');
-    TextEditingController humMinController = TextEditingController(
-        text: producto['humedad'] != null ? producto['humedad']['rangoMinimo'].toString() : '');
-    TextEditingController humMaxController = TextEditingController(
-        text: producto['humedad'] != null ? producto['humedad']['rangoMaximo'].toString() : '');
-    TextEditingController humTarifaController = TextEditingController(
-        text: producto['humedad'] != null ? producto['humedad']['tarifaExtra'].toString() : '');
+  void _showAddDialog(BuildContext ctx, VoidCallback? refetch, List existentes) {
+    final nombreCtrl = TextEditingController();
+    final descCtrl   = TextEditingController();
+    final precioCtrl = TextEditingController();
+    final txtFmt     = FilteringTextInputFormatter.allow(RegExp(r"[a-zA-Z0-9 ]"));
+    final decFmt     = FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d{0,2}'));
 
     showCupertinoDialog(
-      context: context,
-      builder: (context) {
-        return CupertinoAlertDialog(
-          title: Text('Temperatura y Humedad'),
-          content: Column(
-            children: [
-              // Sección de Temperatura.
-              Text('Temperatura', style: TextStyle(fontWeight: FontWeight.bold)),
-              CupertinoTextField(
-                controller: tempMinController,
-                placeholder: 'Rango Mínimo',
-                keyboardType: TextInputType.number,
-              ),
-              SizedBox(height: 8),
-              CupertinoTextField(
-                controller: tempMaxController,
-                placeholder: 'Rango Máximo',
-                keyboardType: TextInputType.number,
-              ),
-              SizedBox(height: 8),
-              CupertinoTextField(
-                controller: tempTarifaController,
-                placeholder: 'Tarifa Extra',
-                keyboardType: TextInputType.numberWithOptions(decimal: true),
-              ),
-              SizedBox(height: 16),
-              // Sección de Humedad.
-              Text('Humedad', style: TextStyle(fontWeight: FontWeight.bold)),
-              CupertinoTextField(
-                controller: humMinController,
-                placeholder: 'Rango Mínimo',
-                keyboardType: TextInputType.number,
-              ),
-              SizedBox(height: 8),
-              CupertinoTextField(
-                controller: humMaxController,
-                placeholder: 'Rango Máximo',
-                keyboardType: TextInputType.number,
-              ),
-              SizedBox(height: 8),
-              CupertinoTextField(
-                controller: humTarifaController,
-                placeholder: 'Tarifa Extra',
-                keyboardType: TextInputType.numberWithOptions(decimal: true),
-              ),
-            ],
+      context: ctx,
+      builder: (_) => CupertinoAlertDialog(
+        title: const Text('Agregar Tipo de Producto'),
+        content: Column(mainAxisSize: MainAxisSize.min, children: [
+          CupertinoTextField(controller: nombreCtrl, placeholder: 'Nombre', inputFormatters: [txtFmt]),
+          const SizedBox(height: 8),
+          CupertinoTextField(controller: descCtrl, placeholder: 'Descripción', inputFormatters: [txtFmt]),
+          const SizedBox(height: 8),
+          CupertinoTextField(
+            controller: precioCtrl,
+            placeholder: 'Precio Base',
+            keyboardType: TextInputType.numberWithOptions(decimal: true),
+            inputFormatters: [decFmt],
           ),
-          actions: [
-            CupertinoDialogAction(
-              child: Text('Cancelar'),
-              onPressed: () => Navigator.pop(context),
-            ),
-            // Botón de guardar que realiza las mutaciones o actualiza el estado.
-            CupertinoDialogAction(
-              child: Icon(CupertinoIcons.check_mark_circled),
-              onPressed: () async {
-                final client = GraphQLProvider.of(context).value;
-                // Imprime en consola el id del producto y las variables que se pasarán.
-                print("Producto ID: ${producto['id']}");
-                print("Variables para Temperatura: rangoMinimo: ${tempMinController.text}, rangoMaximo: ${tempMaxController.text}, tarifaExtra: ${tempTarifaController.text}");
-                print("Variables para Humedad: rangoMinimo: ${humMinController.text}, rangoMaximo: ${humMaxController.text}, tarifaExtra: ${humTarifaController.text}");
-
-                // Para Temperatura: si no existe, se crea; de lo contrario se actualiza localmente.
-                if (producto['temperatura'] == null) {
-                  final resultTemp = await client.mutate(MutationOptions(
-                    document: gql(crearTemperaturaMutation),
-                    variables: {
-                      'tipoProductoId': int.parse(producto['id'].toString()),
-                      'rangoMinimo': int.parse(tempMinController.text),
-                      'rangoMaximo': int.parse(tempMaxController.text),
-                      'tarifaExtra': double.parse(tempTarifaController.text),
-                    },
-                  ));
-                  if (resultTemp.hasException) {
-                    print('Error en mutación Temperatura: ${resultTemp.exception.toString()}');
-                  } else {
-                    print('Resultado mutación Temperatura: ${resultTemp.data}');
-                    if (resultTemp.data != null) {
-                      producto['temperatura'] = resultTemp.data!['crearTemperatura']['temperatura'];
-                    }
-                  }
-                } else {
-                  // Simulación de edición: se actualiza el estado local.
-                  producto['temperatura'] = {
-                    'rangoMinimo': int.parse(tempMinController.text),
-                    'rangoMaximo': int.parse(tempMaxController.text),
-                    'tarifaExtra': double.parse(tempTarifaController.text),
-                  };
-                  print('Actualización local Temperatura: ${producto['temperatura']}');
-                }
-                // Para Humedad: si no existe, se crea; de lo contrario se actualiza localmente.
-                if (producto['humedad'] == null) {
-                  final resultHum = await client.mutate(MutationOptions(
-                    document: gql(crearHumedadMutation),
-                    variables: {
-                      'tipoProductoId': int.parse(producto['id'].toString()),
-                      'rangoMinimo': int.parse(humMinController.text),
-                      'rangoMaximo': int.parse(humMaxController.text),
-                      'tarifaExtra': double.parse(humTarifaController.text),
-                    },
-                  ));
-                  if (resultHum.hasException) {
-                    print('Error en mutación Humedad: ${resultHum.exception.toString()}');
-                  } else {
-                    print('Resultado mutación Humedad: ${resultHum.data}');
-                    if (resultHum.data != null) {
-                      producto['humedad'] = resultHum.data!['crearHumedad']['humedad'];
-                    }
-                  }
-                } else {
-                  // Simulación de edición: se actualiza el estado local.
-                  producto['humedad'] = {
-                    'rangoMinimo': int.parse(humMinController.text),
-                    'rangoMaximo': int.parse(humMaxController.text),
-                    'tarifaExtra': double.parse(humTarifaController.text),
-                  };
-                  print('Actualización local Humedad: ${producto['humedad']}');
-                }
-                setState(() {});
-                Navigator.pop(context);
+        ]),
+        actions: [
+          CupertinoDialogAction(child: const Text('Cancelar'), onPressed: () => Navigator.pop(ctx)),
+          Mutation(
+            options: MutationOptions(
+              document: gql(_mCreateProd),
+              onCompleted: (_) {
+                refetch?.call();
+                Navigator.pop(ctx);
+                ScaffoldMessenger.of(ctx).showSnackBar(const SnackBar(content: Text("✅ Producto creado")));
               },
             ),
-          ],
-        );
-      },
-    );
-  }
-
-  // Diálogo para editar el producto (nombre, descripción y precio base).
-  void _showEditProductDialog(BuildContext context, Map<String, dynamic> producto) {
-    TextEditingController nombreController = TextEditingController(text: producto['nombre']);
-    TextEditingController descripcionController = TextEditingController(text: producto['descripcion']);
-    TextEditingController precioController = TextEditingController(
-        text: producto['precioBase'] is String
-            ? producto['precioBase']
-            : (producto['precioBase'] as num).toString());
-
-    showCupertinoDialog(
-      context: context,
-      builder: (context) {
-        return CupertinoAlertDialog(
-          title: Text('Editar Producto'),
-          content: Column(
-            children: [
-              CupertinoTextField(
-                controller: nombreController,
-                placeholder: 'Nombre',
-              ),
-              SizedBox(height: 8),
-              CupertinoTextField(
-                controller: descripcionController,
-                placeholder: 'Descripción',
-              ),
-              SizedBox(height: 8),
-              CupertinoTextField(
-                controller: precioController,
-                placeholder: 'Precio Base',
-                keyboardType: TextInputType.numberWithOptions(decimal: true),
-              ),
-            ],
-          ),
-          actions: [
-            CupertinoDialogAction(
-              child: Text('Cancelar'),
-              onPressed: () => Navigator.pop(context),
-            ),
-            CupertinoDialogAction(
-              child: Icon(CupertinoIcons.check_mark_circled),
+            builder: (runAdd, _) => CupertinoDialogAction(
+              child: const Icon(CupertinoIcons.check_mark_circled),
               onPressed: () {
-                setState(() {
-                  producto['nombre'] = nombreController.text;
-                  producto['descripcion'] = descripcionController.text;
-                  producto['precioBase'] = double.tryParse(precioController.text) ?? producto['precioBase'];
-                });
-                Navigator.pop(context);
+                final n = nombreCtrl.text.trim();
+                final d = descCtrl.text.trim();
+                final p = parseDouble(precioCtrl.text, fallback: -1);
+                if (n.isEmpty || d.isEmpty || p < 0) {
+                  ScaffoldMessenger.of(ctx).showSnackBar(const SnackBar(content: Text("❗ Completa todos los campos correctamente")));
+                  return;
+                }
+                if (existentes.any((x) => (x['nombre'] as String).toLowerCase() == n.toLowerCase())) {
+                  ScaffoldMessenger.of(ctx).showSnackBar(const SnackBar(content: Text("⚠️ Ya existe este producto")));
+                  return;
+                }
+                runAdd({'nombre': n, 'descripcion': d, 'precioBase': p});
               },
             ),
-          ],
-        );
-      },
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showEditDialog(BuildContext ctx, Map prod, VoidCallback? refetch) {
+    final id         = parseInt(prod['id']);
+    final nombreCtrl = TextEditingController(text: prod['nombre']);
+    final descCtrl   = TextEditingController(text: prod['descripcion']);
+    final precioCtrl = TextEditingController(text: prod['precioBase']?.toString() ?? '');
+    final txtFmt     = FilteringTextInputFormatter.allow(RegExp(r"[a-zA-Z0-9 ]"));
+    final decFmt     = FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d{0,2}'));
+
+    showCupertinoDialog(
+      context: ctx,
+      builder: (_) => CupertinoAlertDialog(
+        title: const Text('Editar Producto'),
+        content: Column(mainAxisSize: MainAxisSize.min, children: [
+          CupertinoTextField(controller: nombreCtrl, placeholder: 'Nombre', inputFormatters: [txtFmt]),
+          const SizedBox(height: 8),
+          CupertinoTextField(controller: descCtrl, placeholder: 'Descripción', inputFormatters: [txtFmt]),
+          const SizedBox(height: 8),
+          CupertinoTextField(
+            controller: precioCtrl,
+            placeholder: 'Precio Base',
+            keyboardType: TextInputType.numberWithOptions(decimal: true),
+            inputFormatters: [decFmt],
+          ),
+        ]),
+        actions: [
+          CupertinoDialogAction(child: const Text('Cancelar'), onPressed: () => Navigator.pop(ctx)),
+          Mutation(
+            options: MutationOptions(
+              document: gql(_mEditProd),
+              onCompleted: (_) {
+                refetch?.call();
+                Navigator.pop(ctx);
+                ScaffoldMessenger.of(ctx).showSnackBar(const SnackBar(content: Text("✏️ Producto actualizado")));
+              },
+            ),
+            builder: (runEdit, _) => CupertinoDialogAction(
+              child: const Icon(CupertinoIcons.check_mark_circled),
+              onPressed: () {
+                final n = nombreCtrl.text.trim();
+                final d = descCtrl.text.trim();
+                final p = parseDouble(precioCtrl.text, fallback: -1);
+                if (n.isEmpty || d.isEmpty || p < 0) {
+                  ScaffoldMessenger.of(ctx).showSnackBar(const SnackBar(content: Text("❗ Completa todos los campos correctamente")));
+                  return;
+                }
+                runEdit({'id': id, 'nombre': n, 'descripcion': d, 'precioBase': p});
+              },
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showDeleteDialog(BuildContext ctx, int id, VoidCallback? refetch) {
+    showCupertinoDialog(
+      context: ctx,
+      builder: (_) => CupertinoAlertDialog(
+        title: const Text('Eliminar Producto'),
+        content: const Text('¿Seguro que deseas eliminar este producto?'),
+        actions: [
+          CupertinoDialogAction(child: const Text('Cancelar'), onPressed: () => Navigator.pop(ctx)),
+          Mutation(
+            options: MutationOptions(
+              document: gql(_mDeleteProd),
+              onCompleted: (_) {
+                refetch?.call();
+                Navigator.pop(ctx);
+                ScaffoldMessenger.of(ctx).showSnackBar(const SnackBar(content: Text("🗑️ Producto eliminado")));
+              },
+            ),
+            builder: (runDel, _) => CupertinoDialogAction(
+              child: const Icon(CupertinoIcons.delete),
+              onPressed: () => runDel({'id': id}),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showTempHumDialog(BuildContext ctx, Map prod, VoidCallback? refetch) {
+    final id       = parseInt(prod['id']);
+    final hasTemp  = prod['temperatura'] != null;
+    final hasHum   = prod['humedad'] != null;
+    final tMinCtrl = TextEditingController(text: prod['temperatura']?['rangoMinimo']?.toString());
+    final tMaxCtrl = TextEditingController(text: prod['temperatura']?['rangoMaximo']?.toString());
+    final tTarCtrl = TextEditingController(text: prod['temperatura']?['tarifaExtra']?.toString());
+    final hMinCtrl = TextEditingController(text: prod['humedad']?['rangoMinimo']?.toString());
+    final hMaxCtrl = TextEditingController(text: prod['humedad']?['rangoMaximo']?.toString());
+    final hTarCtrl = TextEditingController(text: prod['humedad']?['tarifaExtra']?.toString());
+    final intFmt   = FilteringTextInputFormatter.digitsOnly;
+    final decFmt   = FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d{0,2}'));
+
+    showCupertinoDialog(
+      context: ctx,
+      builder: (_) => CupertinoAlertDialog(
+        title: const Text('Temperatura & Humedad'),
+        content: SingleChildScrollView(
+          child: Column(mainAxisSize: MainAxisSize.min, children: [
+            const Text('Temperatura', style: TextStyle(fontWeight: FontWeight.bold)),
+            CupertinoTextField(controller: tMinCtrl, placeholder: 'Mínimo', keyboardType: TextInputType.number, inputFormatters: [intFmt]),
+            const SizedBox(height: 8),
+            CupertinoTextField(controller: tMaxCtrl, placeholder: 'Máximo', keyboardType: TextInputType.number, inputFormatters: [intFmt]),
+            const SizedBox(height: 8),
+            CupertinoTextField(controller: tTarCtrl, placeholder: 'Tarifa Extra', keyboardType: TextInputType.numberWithOptions(decimal: true), inputFormatters: [decFmt]),
+            const SizedBox(height: 16),
+            const Text('Humedad', style: TextStyle(fontWeight: FontWeight.bold)),
+            CupertinoTextField(controller: hMinCtrl, placeholder: 'Mínimo', keyboardType: TextInputType.number, inputFormatters: [intFmt]),
+            const SizedBox(height: 8),
+            CupertinoTextField(controller: hMaxCtrl, placeholder: 'Máximo', keyboardType: TextInputType.number, inputFormatters: [intFmt]),
+            const SizedBox(height: 8),
+            CupertinoTextField(controller: hTarCtrl, placeholder: 'Tarifa Extra', keyboardType: TextInputType.numberWithOptions(decimal: true), inputFormatters: [decFmt]),
+          ]),
+        ),
+        actions: [
+          CupertinoDialogAction(child: const Text('Cancelar'), onPressed: () => Navigator.pop(ctx)),
+          Mutation(
+            options: MutationOptions(
+              document: gql(hasTemp ? _mEditTemp : _mCreateTemp),
+              onCompleted: (_) => refetch?.call(),
+            ),
+            builder: (runTemp, _) => Mutation(
+              options: MutationOptions(
+                document: gql(hasHum ? _mEditHum : _mCreateHum),
+                onCompleted: (_) {
+                  Navigator.pop(ctx);
+                  refetch?.call();
+                  _alert(ctx, 'Listo', 'Temperatura y humedad configuradas.');
+                },
+              ),
+              builder: (runHum, _) => CupertinoDialogAction(
+                child: const Text('Guardar'),
+                onPressed: () {
+                  final minT = parseInt(tMinCtrl.text);
+                  final maxT = parseInt(tMaxCtrl.text);
+                  final valT = parseDouble(tTarCtrl.text);
+                  final minH = parseInt(hMinCtrl.text);
+                  final maxH = parseInt(hMaxCtrl.text);
+                  final valH = parseDouble(hTarCtrl.text);
+
+                  if (minT > maxT) { _alert(ctx, 'Error', 'Temperatura mínima no puede ser mayor que la máxima.'); return; }
+                  if (minH > maxH) { _alert(ctx, 'Error', 'Humedad mínima no puede ser mayor que la máxima.'); return; }
+                  if (valT < 0 || valH < 0) { _alert(ctx, 'Error', 'La tarifa extra no puede ser negativa.'); return; }
+
+                  runTemp({
+                    if (hasTemp) 'id': prod['temperatura']['id'],
+                    if (!hasTemp) 'tipoProductoId': id,
+                    'rangoMinimo': minT,
+                    'rangoMaximo': maxT,
+                    'tarifaExtra': valT,
+                  });
+                  runHum({
+                    if (hasHum) 'id': prod['humedad']['id'],
+                    if (!hasHum) 'tipoProductoId': id,
+                    'rangoMinimo': minH,
+                    'rangoMaximo': maxH,
+                    'tarifaExtra': valH,
+                  });
+                },
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -365,124 +340,103 @@ class _CrudTipoProductosAdminState extends State<CrudTipoProductosAdmin> {
   Widget build(BuildContext context) {
     return CupertinoPageScaffold(
       navigationBar: CupertinoNavigationBar(
-        middle: Text('Tipos de Productos'),
-        trailing: GestureDetector(
-          child: Icon(CupertinoIcons.add),
-          onTap: () => _showAddDialog(context),
+        middle: const Text('Tipos de Productos'),
+        trailing: Query(
+          options: QueryOptions(document: gql(_queryList)),
+          builder: (resAdd, { refetch, fetchMore }) {
+            if (resAdd.isLoading) return const SizedBox();
+            final lista = resAdd.data!['tipoProductos'] as List;
+            return GestureDetector(
+              child: const Icon(CupertinoIcons.add),
+              onTap: () => _showAddDialog(context, refetch, lista),
+            );
+          },
         ),
       ),
       child: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.all(16.0),
-          child: Query(
-            options: QueryOptions(document: gql(obtenerTipoProductosQuery)),
-            builder: (QueryResult result, {VoidCallback? refetch, FetchMore? fetchMore}) {
-              if (result.isLoading) {
-                return Center(child: CupertinoActivityIndicator());
-              }
-              if (result.hasException) {
-                print('Error en Query obtenerTipoProductos: ${result.exception.toString()}');
-                return Center(child: Text("Error: ${result.exception.toString()}"));
-              }
+        child: Query(
+          options: QueryOptions(document: gql(_queryList)),
+          builder: (res, {refetch, fetchMore}) {
+            if (res.isLoading) return const Center(child: CupertinoActivityIndicator());
+            final productos = res.data!['tipoProductos'] as List;
+            final filtered = searchQuery.isEmpty
+                ? productos
+                : productos.where((p) => (p['nombre'] as String).toLowerCase().contains(searchQuery.toLowerCase())).toList();
 
-              List productos = result.data?['tipoProductos'] ?? [];
-              List filteredProductos = searchQuery.isEmpty
-                  ? productos
-                  : productos.where((producto) {
-                      final nombre = producto['nombre'] as String;
-                      return nombre.toLowerCase().contains(searchQuery.toLowerCase());
-                    }).toList();
-
-              return Column(
-                children: [
-                  CupertinoTextField(
+            return Column(
+              children: [
+                Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: CupertinoTextField(
                     controller: _searchController,
-                    onChanged: (query) {
-                      setState(() {
-                        searchQuery = query;
-                      });
-                    },
-                    placeholder: 'Buscar productos',
-                    padding: EdgeInsets.symmetric(horizontal: 16.0, vertical: 10.0),
-                    decoration: BoxDecoration(
-                      border: Border.all(color: CupertinoColors.inactiveGray),
-                      borderRadius: BorderRadius.circular(8.0),
-                    ),
+                    placeholder: 'Buscar...',
+                    onChanged: (v) => setState(() => searchQuery = v),
                   ),
-                  SizedBox(height: 16),
-                  Expanded(
-                    child: CupertinoScrollbar(
-                      child: ListView.builder(
-                        itemCount: filteredProductos.length,
-                        itemBuilder: (context, index) {
-                          var producto = filteredProductos[index];
-                          double precio;
-                          if (producto['precioBase'] is String) {
-                            precio = double.tryParse(producto['precioBase']) ?? 0.0;
-                          } else if (producto['precioBase'] is num) {
-                            precio = (producto['precioBase'] as num).toDouble();
-                          } else {
-                            precio = 0.0;
-                          }
-                          return Card(
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(10),
-                            ),
-                            elevation: 4,
-                            margin: EdgeInsets.symmetric(vertical: 8),
-                            child: Padding(
-                              padding: const EdgeInsets.all(16.0),
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
+                ),
+                Expanded(
+                  child: GridView.builder(
+                    padding: const EdgeInsets.all(16),
+                    gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                      crossAxisCount: MediaQuery.of(context).size.width > 800 ? 3 : 2,
+                      crossAxisSpacing: 16, mainAxisSpacing: 16, childAspectRatio: 1.4,
+                    ),
+                    itemCount: filtered.length,
+                    itemBuilder: (ctx, i) {
+                      final p      = filtered[i] as Map<String, dynamic>;
+                      final hasTemp = p['temperatura'] != null;
+                      final hasHum  = p['humedad'] != null;
+
+                      return Card(
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                        elevation: 4,
+                        child: Padding(
+                          padding: const EdgeInsets.all(12),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(p['nombre'], style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                              const SizedBox(height: 4),
+                              Text('Precio: \$${parseDouble(p['precioBase']).toStringAsFixed(2)}'),
+                              const SizedBox(height: 4),
+                              if (!hasTemp || !hasHum)
+                                Text('⚠️ T&H pendiente', style: TextStyle(color: Colors.red, fontSize: 12)),
+                              const Spacer(),
+                              Row(
+                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                 children: [
-                                  Text(
-                                    producto['nombre'],
-                                    style: CupertinoTheme.of(context)
-                                        .textTheme
-                                        .textStyle
-                                        .copyWith(fontSize: 16, fontWeight: FontWeight.bold),
+                                  IconButton(
+                                    icon: const Icon(Icons.settings, color: Colors.blue),
+                                    onPressed: () => _showTempHumDialog(context, p, refetch),
+                                    tooltip: 'Configurar T&H',
                                   ),
-                                  SizedBox(height: 8),
-                                  Text('Precio base: \$${precio.toStringAsFixed(2)}'),
-                                  SizedBox(height: 8),
-                                  Text('Descripción: ${producto['descripcion'] ?? ""}'),
-                                  if (producto['temperatura'] != null)
-                                    Text(
-                                      'Temperatura: ${producto['temperatura']['rangoMinimo']} - ${producto['temperatura']['rangoMaximo']} (tarifa: \$${producto['temperatura']['tarifaExtra']})',
-                                      style: TextStyle(fontSize: 12),
+                                  IconButton(
+                                    icon: const Icon(Icons.edit, color: Colors.orange),
+                                    onPressed: () => _showEditDialog(context, p, refetch),
+                                    tooltip: 'Editar',
+                                  ),
+                                  Mutation(
+                                    options: MutationOptions(
+                                      document: gql(_mDeleteProd),
+                                      onCompleted: (_) => refetch?.call(),
                                     ),
-                                  if (producto['humedad'] != null)
-                                    Text(
-                                      'Humedad: ${producto['humedad']['rangoMinimo']} - ${producto['humedad']['rangoMaximo']} (tarifa: \$${producto['humedad']['tarifaExtra']})',
-                                      style: TextStyle(fontSize: 12),
+                                    builder: (runDel, _) => IconButton(
+                                      icon: const Icon(Icons.delete, color: Colors.red),
+                                      onPressed: () => _showDeleteDialog(context, parseInt(p['id']), refetch),
+                                      tooltip: 'Eliminar',
                                     ),
-                                  Row(
-                                    mainAxisAlignment: MainAxisAlignment.end,
-                                    children: [
-                                      CupertinoButton(
-                                        padding: EdgeInsets.zero,
-                                        child: Icon(CupertinoIcons.thermometer),
-                                        onPressed: () => _showTempHumedadDialog(context, producto),
-                                      ),
-                                      CupertinoButton(
-                                        padding: EdgeInsets.zero,
-                                        child: Icon(CupertinoIcons.pencil),
-                                        onPressed: () => _showEditProductDialog(context, producto),
-                                      ),
-                                    ],
                                   ),
                                 ],
                               ),
-                            ),
-                          );
-                        },
-                      ),
-                    ),
+                            ],
+                          ),
+                        ),
+                      );
+                    },
                   ),
-                ],
-              );
-            },
-          ),
+                ),
+              ],
+            );
+          },
         ),
       ),
     );

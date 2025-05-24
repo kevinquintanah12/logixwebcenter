@@ -28,7 +28,7 @@ class _PaymentPageState extends State<PaymentPage>
   @override
   void initState() {
     super.initState();
-    // El controlador se usará para animar la escala del spotlight.
+    // Controlador para animación de spotlight
     _controller = AnimationController(
       vsync: this,
       duration: const Duration(seconds: 2),
@@ -49,32 +49,68 @@ class _PaymentPageState extends State<PaymentPage>
     super.dispose();
   }
 
-  // Simula el proceso de pago, mostrando la animación de spotlight para
-  // "Procesando pago" y luego "Pago Exitoso" en el centro de la pantalla.
+  // Simula el proceso de pago, mostrando animación de "Procesando" y "Exito"
   Future<void> _simulatePayment() async {
     if (_isProcessing) return;
-
     setState(() {
       _isProcessing = true;
       _isSuccess = false;
     });
-    // Inicia la animación para el estado de procesando
     _controller.forward(from: 0);
     await Future.delayed(const Duration(seconds: 3));
-
     setState(() {
       _isProcessing = false;
       _isSuccess = true;
     });
-    // Reanuda la animación para mostrar el estado de éxito
     _controller.forward(from: 0);
     await Future.delayed(const Duration(seconds: 2));
-
-    // Oculta el overlay de éxito
     setState(() {
       _isSuccess = false;
     });
     _controller.reset();
+  }
+
+  /// Función que valida el formulario de pago.
+  /// Retorna null si la validación es exitosa, o un mensaje de error en caso contrario.
+  String? _validarFormulario() {
+    final cardNumber = _cardNumberController.text.trim();
+    final expiry = _expiryController.text.trim();
+    final cvv = _cvvController.text.trim();
+
+    if (cardNumber.isEmpty || expiry.isEmpty || cvv.isEmpty) {
+      return 'Por favor, complete todos los campos.';
+    }
+    // Validar que el número de tarjeta tenga 16 dígitos y sean solo números.
+    if (!RegExp(r'^[0-9]{16}$').hasMatch(cardNumber)) {
+      return 'Ingrese un número de tarjeta válido (16 dígitos).';
+    }
+    // Validar que el CVV tenga 3 dígitos.
+    if (!RegExp(r'^[0-9]{3}$').hasMatch(cvv)) {
+      return 'Ingrese un CVV válido (3 dígitos).';
+    }
+    // Validar formato del expiry (MM/YY). Se usa una expresión regular simple.
+    if (!RegExp(r'^(0[1-9]|1[0-2])\/\d{2}$').hasMatch(expiry)) {
+      return 'Ingrese una fecha de expiración válida (MM/YY).';
+    }
+    return null;
+  }
+
+  /// Se invoca al presionar "Pagar". Si la validación falla, muestra un diálogo de error.
+  Future<void> _procesarPago() async {
+    final errorMensaje = _validarFormulario();
+    if (errorMensaje != null) {
+      _mostrarDialogoError(context, errorMensaje);
+      return;
+    }
+    // Si todo es correcto, se simula el proceso de pago.
+    await _simulatePayment();
+    // Luego se navega a la pantalla de "Agregar Cliente" u otra.
+    Navigator.push(
+      context,
+      CupertinoPageRoute(
+        builder: (context) =>  AddClienteScreen(),
+      ),
+    );
   }
 
   @override
@@ -87,8 +123,6 @@ class _PaymentPageState extends State<PaymentPage>
         middle: Text('Pago Automático'),
       ),
       child: SafeArea(
-        // Usamos un Stack para colocar el contenido normal y sobre él
-        // el overlay animado en el centro.
         child: Stack(
           children: [
             SingleChildScrollView(
@@ -110,15 +144,16 @@ class _PaymentPageState extends State<PaymentPage>
                     maxLength: 16,
                   ),
                   const SizedBox(height: 20),
+                  // Para el campo de expiración, se usa un GestureDetector y AbsorbPointer para evitar entrada manual.
                   GestureDetector(
                     onTap: _showExpiryDatePicker,
                     child: AbsorbPointer(
                       child: _buildCardInputField(
                         controller: _expiryController,
-                        focusNode: FocusNode(),
+                        focusNode: FocusNode(), // No necesitamos focus aquí.
                         placeholder: 'MM/YY',
                         keyboardType: TextInputType.datetime,
-                        maxLength: 5, // "MM/YY"
+                        maxLength: 5,
                       ),
                     ),
                   ),
@@ -134,29 +169,11 @@ class _PaymentPageState extends State<PaymentPage>
                   const SizedBox(height: 30),
                   CupertinoButton.filled(
                     child: const Text("Pagar"),
-                    onPressed: () async {
-    // Llamamos a simulatePayment y esperamos que se complete
-                    await _simulatePayment();
-
-                    // Luego navegamos a PaymentPage
-                    Navigator.push(
-                      context,
-                      CupertinoPageRoute(
-                        builder: (context) => AddClienteScreen(),
-                      ),
-                    );
-                  },
-                )
-                    
-                                  // Navegamos hacia PaymentViewScreen
-                                  
-                  
-                  // Se removió la visualización previa del estado de pago
-                  // ya que ahora se muestra como overlay.
+                    onPressed: _procesarPago,
+                  ),
                 ],
               ),
             ),
-            // Si se está procesando o se tuvo éxito, se muestra el overlay de spotlight.
             if (_isProcessing || _isSuccess)
               Center(
                 child: _buildMinimalSuccessOverlay(),
@@ -167,26 +184,57 @@ class _PaymentPageState extends State<PaymentPage>
     );
   }
 
-  /// Crea el overlay de animación con efecto spotlight usando ScaleTransition.
-
-/// Widget minimalista que muestra la animación de éxito
-Widget _buildMinimalSuccessOverlay() {
-  if (_isSuccess) {
-    return Center(
-      child: Container(
-        padding: const EdgeInsets.all(20),
-        child: Lottie.asset(
-          'assets\success.json', // Asegúrate de tener este asset en tu proyecto
-          width: 100,
-          repeat: false,
+  /// Widget que muestra la animación de éxito (spotlight) al completar el pago.
+  Widget _buildMinimalSuccessOverlay() {
+    if (_isSuccess) {
+      return Center(
+        child: Container(
+          padding: const EdgeInsets.all(20),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(12),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.2),
+                blurRadius: 10,
+                spreadRadius: 2,
+              ),
+            ],
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(
+                Icons.check_circle,
+                color: Colors.green,
+                size: 60,
+              ),
+              const SizedBox(height: 10),
+              const Text(
+                "¡Éxito!",
+                style: TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.black87,
+                ),
+              ),
+              const SizedBox(height: 5),
+              const Text(
+                "La operación se completó correctamente.",
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: 14,
+                  color: Colors.black54,
+                ),
+              ),
+            ],
+          ),
         ),
-      ),
-    );
-  } else {
-    return const SizedBox.shrink();
+      );
+    } else {
+      return const SizedBox.shrink();
+    }
   }
-}
-
 
   Widget _buildCreditCardPreview(BuildContext context) {
     final double screenWidth = MediaQuery.of(context).size.width;
@@ -301,12 +349,12 @@ Widget _buildMinimalSuccessOverlay() {
       keyboardType: keyboardType,
       obscureText: obscureText,
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      maxLength: maxLength,
       decoration: BoxDecoration(
         color: CupertinoColors.systemGrey6,
         borderRadius: BorderRadius.circular(12),
       ),
       style: const TextStyle(fontSize: 16, color: CupertinoColors.black),
-      maxLength: maxLength,
     );
   }
 
@@ -317,6 +365,7 @@ Widget _buildMinimalSuccessOverlay() {
     );
   }
 
+  /// Para el campo de expiración, se usa un date picker y se evita la edición manual.
   void _showExpiryDatePicker() async {
     final DateTime currentDate = DateTime.now();
     final DateTime? pickedDate = await showDatePicker(
@@ -324,6 +373,7 @@ Widget _buildMinimalSuccessOverlay() {
       initialDate: currentDate,
       firstDate: DateTime(currentDate.year),
       lastDate: DateTime(currentDate.year + 10),
+      // Se puede personalizar para que solo muestre mes y año.
     );
 
     if (pickedDate != null) {
@@ -332,5 +382,24 @@ Widget _buildMinimalSuccessOverlay() {
         _expiryController.text = formattedDate;
       });
     }
+  }
+
+  /// Muestra un diálogo de error con un mensaje personalizado.
+  void _mostrarDialogoError(BuildContext context, String mensaje) {
+    showCupertinoDialog(
+      context: context,
+      builder: (context) {
+        return CupertinoAlertDialog(
+          title: const Text('Error'),
+          content: Text(mensaje),
+          actions: [
+            CupertinoDialogAction(
+              child: const Text('Aceptar', style: TextStyle(color: Colors.black)),
+              onPressed: () => Navigator.pop(context),
+            ),
+          ],
+        );
+      },
+    );
   }
 }

@@ -12,20 +12,22 @@ class EntryPoint extends StatefulWidget {
 }
 
 class _EntryPointState extends State<EntryPoint> {
-  final List _pages = [
-    ViajesScreen(),
+  // Pantallas disponibles (sin "Viajes")
+  final List<Widget> _pages = [
     CatalogsScreen(),
     ProfileScreen(),
-    PaquetesScreen(), // Pantalla de Paquetes añadida aquí
+    PaquetesScreen(),
   ];
-  int _currentIndex = 3;
+
+  // Inicializar en la primera pantalla (Catálogos)
+  int _currentIndex = 0;
 
   @override
   Widget build(BuildContext context) {
     SvgPicture svgIcon(String src, {Color? color}) {
       return SvgPicture.asset(
         src,
-        height: 20, // Tamaño más pequeño para íconos
+        height: 20,
         colorFilter: ColorFilter.mode(
           color ?? Colors.grey,
           BlendMode.srcIn,
@@ -35,7 +37,7 @@ class _EntryPointState extends State<EntryPoint> {
 
     Widget selectedIcon(String src) {
       return Container(
-        padding: const EdgeInsets.all(8), // Padding más compacto
+        padding: const EdgeInsets.all(8),
         decoration: BoxDecoration(
           color: Colors.white.withOpacity(0.2),
           borderRadius: BorderRadius.circular(12),
@@ -50,7 +52,7 @@ class _EntryPointState extends State<EntryPoint> {
         bool isDesktop = constraints.maxWidth >= 1024;
 
         return Scaffold(
-          appBar: null, // Eliminar AppBar en todas las pantallas
+          appBar: null,
           body: Row(
             children: [
               if (isDesktop)
@@ -68,14 +70,6 @@ class _EntryPointState extends State<EntryPoint> {
                   groupAlignment: 0.0,
                   destinations: [
                     NavigationRailDestination(
-                      icon: svgIcon("assets/icons/Travel.svg"),
-                      selectedIcon: selectedIcon("assets/icons/Travel.svg"),
-                      label: const Text(
-                        "Viajes",
-                        style: TextStyle(color: Colors.white),
-                      ),
-                    ),
-                    NavigationRailDestination(
                       icon: svgIcon("assets/icons/Category.svg"),
                       selectedIcon: selectedIcon("assets/icons/Category.svg"),
                       label: const Text(
@@ -91,9 +85,8 @@ class _EntryPointState extends State<EntryPoint> {
                         style: TextStyle(color: Colors.white),
                       ),
                     ),
-                    // Agregar la opción de "Paquetes"
                     NavigationRailDestination(
-                      icon: svgIcon("assets/icons/package.svg"), // Ícono de Paquetes
+                      icon: svgIcon("assets/icons/package.svg"),
                       selectedIcon: selectedIcon("assets/icons/package.svg"),
                       label: const Text(
                         "Paquetes",
@@ -132,32 +125,23 @@ class _EntryPointState extends State<EntryPoint> {
                       ? Colors.white
                       : const Color(0xFF101015),
                   type: BottomNavigationBarType.fixed,
-                  selectedFontSize: 10, // Fuente más pequeña para seleccionados
-                  unselectedFontSize: 10, // Fuente más pequeña para no seleccionados
-                  iconSize: 20, // Tamaño reducido para íconos
+                  selectedFontSize: 10,
+                  unselectedFontSize: 10,
+                  iconSize: 20,
                   selectedItemColor: primaryColor,
                   unselectedItemColor: Colors.grey,
-                  elevation: 8, // Sombra para mejor separación
+                  elevation: 8,
                   items: [
                     BottomNavigationBarItem(
-                      icon: svgIcon("assets/icons/Travel.svg"),
-                      activeIcon:
-                          svgIcon("assets/icons/Travel.svg", color: primaryColor),
-                      label: "Viajes",
-                    ),
-                    BottomNavigationBarItem(
                       icon: svgIcon("assets/icons/Category.svg"),
-                      activeIcon: svgIcon("assets/icons/Category.svg",
-                          color: primaryColor),
+                      activeIcon: svgIcon("assets/icons/Category.svg", color: primaryColor),
                       label: "Catálogos",
                     ),
                     BottomNavigationBarItem(
                       icon: svgIcon("assets/icons/Profile.svg"),
-                      activeIcon: svgIcon("assets/icons/Profile.svg",
-                          color: primaryColor),
+                      activeIcon: svgIcon("assets/icons/Profile.svg", color: primaryColor),
                       label: "Perfil",
                     ),
-                    // Agregar la opción de "Paquetes"
                     BottomNavigationBarItem(
                       icon: svgIcon("assets/icons/package.svg"),
                       activeIcon: svgIcon("assets/icons/package.svg", color: primaryColor),

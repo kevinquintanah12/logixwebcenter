@@ -30,6 +30,9 @@ class _LoginScreenState extends State<LoginScreen> {
   final TextEditingController usernameController = TextEditingController();
   final TextEditingController passwordController = TextEditingController();
 
+  // Toggle para mostrar/ocultar contraseña
+  bool _showPassword = false;
+
   // Guardar el token en SharedPreferences
   Future<void> saveToken(String token) async {
     final prefs = await SharedPreferences.getInstance();
@@ -142,10 +145,22 @@ class _LoginScreenState extends State<LoginScreen> {
                           const SizedBox(height: defaultPadding),
                           TextFormField(
                             controller: passwordController,
-                            obscureText: true,
-                            decoration: const InputDecoration(
+                            obscureText: !_showPassword,
+                            decoration: InputDecoration(
                               labelText: "Contraseña",
-                              border: OutlineInputBorder(),
+                              border: const OutlineInputBorder(),
+                              suffixIcon: IconButton(
+                                icon: Icon(
+                                  _showPassword
+                                      ? Icons.visibility
+                                      : Icons.visibility_off,
+                                ),
+                                onPressed: () {
+                                  setState(() {
+                                    _showPassword = !_showPassword;
+                                  });
+                                },
+                              ),
                             ),
                             validator: (value) {
                               if (value == null || value.isEmpty) {
@@ -179,11 +194,13 @@ class _LoginScreenState extends State<LoginScreen> {
                             print('Token: $token');
 
                             // Navegar a la pantalla principal
-                            Navigator.pushNamed(context, entryPointScreenRoute);
+                            Navigator.pushNamed(
+                                context, entryPointScreenRoute);
                           } else {
                             ScaffoldMessenger.of(context).showSnackBar(
                               const SnackBar(
-                                content: Text("Error: respuesta inválida del servidor"),
+                                content:
+                                    Text("Error: respuesta inválida del servidor"),
                               ),
                             );
                           }

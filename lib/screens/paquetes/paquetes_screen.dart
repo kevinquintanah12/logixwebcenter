@@ -15,356 +15,25 @@ class PaquetesScreen extends StatefulWidget {
 class _PaquetesScreenState extends State<PaquetesScreen> {
   int _selectedIndex = 0;
 
+  // Solo las pantallas solicitadas: Nuevo, Atención, InterOp, Entregas
   final List<Widget> paquetesScreens = [
-    CalcularEnvioScreen(),
-    ControlPaqueteScreen(),
-    AtencionPaqueteScreen(),
-    InteroperabilidadPaqueteScreen(),
-    InventarioPaqueteScreen(),
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-    
-    AlertasPaqueteScreen(),
-    EntregasPaqueteScreen(),
+    CalcularEnvioScreen(),        // Nuevo
+    AtencionPaqueteScreen(),      // Atención
+    InteroperabilidadPaqueteScreen(), // InterOp
+    EntregasPaqueteScreen(),      // Entregas
   ];
 
   final List<String> paquetesLabels = [
     "Nuevo",
-    "Control",
     "Atención",
     "InterOp",
-    "Inventario",
-    "Alertas",
     "Entregas",
   ];
 
   final List<IconData> paquetesIcons = [
     Icons.add_box_outlined,
-    Icons.history_outlined,
     Icons.help_outline,
     Icons.link_outlined,
-    Icons.storefront_outlined,
-    Icons.warning_amber_outlined,
     Icons.done_all_outlined,
   ];
 
@@ -385,10 +54,14 @@ class _PaquetesScreenState extends State<PaquetesScreen> {
                     });
                   },
                   labelType: NavigationRailLabelType.all,
+                  groupAlignment: 0.0, // Centrar las opciones
                   destinations: List.generate(paquetesLabels.length, (index) {
                     return NavigationRailDestination(
                       icon: Icon(paquetesIcons[index]),
-                      selectedIcon: Icon(paquetesIcons[index], color: Colors.blueAccent),
+                      selectedIcon: Icon(
+                        paquetesIcons[index],
+                        color: Colors.blueAccent,
+                      ),
                       label: Text(paquetesLabels[index]),
                     );
                   }),

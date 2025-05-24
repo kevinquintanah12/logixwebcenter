@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:graphql_flutter/graphql_flutter.dart';
@@ -18,7 +19,7 @@ class ViewUbicaciones extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return CupertinoPageScaffold(
-      navigationBar: CupertinoNavigationBar(
+      navigationBar: const CupertinoNavigationBar(
         middle: Text('Seleccionar Ubicación'),
       ),
       child: SafeArea(
@@ -27,23 +28,65 @@ class ViewUbicaciones extends StatelessWidget {
           child: Query(
             options: QueryOptions(
               document: gql(obtenerUbicacionesQuery),
+              fetchPolicy: FetchPolicy.networkOnly,
+              errorPolicy: ErrorPolicy.ignore,
             ),
             builder: (QueryResult result, {VoidCallback? refetch, FetchMore? fetchMore}) {
               if (result.isLoading) {
-                return Center(child: CupertinoActivityIndicator());
-              }
-              if (result.hasException) {
-                return Center(child: Text("Error: ${result.exception.toString()}"));
+                return const Center(child: CupertinoActivityIndicator());
               }
 
-              print("Respuesta del query: ${result.data}");
+              if (result.hasException || result.data == null) {
+                final linkException = result.exception?.linkException;
+                final bool isInternetError = linkException is NetworkException ||
+                    linkException?.originalException is SocketException;
 
-              List ubicaciones = result.data?['ubicaciones'] ?? [];
+                return Center(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(
+                        isInternetError
+                            ? CupertinoIcons.wifi_exclamationmark
+                            : CupertinoIcons.exclamationmark_circle,
+                        size: 50,
+                        color: CupertinoColors.systemGrey,
+                      ),
+                      const SizedBox(height: 16),
+                      Text(
+                        isInternetError
+                            ? 'Parece que no tienes conexión a internet.'
+                            : 'No pudimos cargar las ubicaciones en este momento.',
+                        style: const TextStyle(fontSize: 14, color: CupertinoColors.systemGrey),
+                        textAlign: TextAlign.center,
+                      ),
+                      const SizedBox(height: 12),
+                      CupertinoButton.filled(
+                        padding: const EdgeInsets.symmetric(horizontal: 20),
+                        onPressed: refetch,
+                        child: const Text("Reintentar"),
+                      ),
+                    ],
+                  ),
+                );
+              }
+
+              final List ubicaciones = result.data?['ubicaciones'] ?? [];
+
+              if (ubicaciones.isEmpty) {
+                return const Center(
+                  child: Text(
+                    'No hay ubicaciones disponibles.',
+                    style: TextStyle(fontSize: 14, color: CupertinoColors.systemGrey),
+                    textAlign: TextAlign.center,
+                  ),
+                );
+              }
 
               return ListView.builder(
                 itemCount: ubicaciones.length,
                 itemBuilder: (context, index) {
-                  var ubicacion = ubicaciones[index];
+                  final ubicacion = ubicaciones[index];
                   return GestureDetector(
                     onTap: () {
                       Navigator.pop(context, {
